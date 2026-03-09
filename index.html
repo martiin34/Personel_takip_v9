@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personel Takip PRO</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<meta name="theme-color" content="#2c3e50">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+/* CSS mobil + masaüstü uyumlu */
+body{font-family:Arial, sans-serif;margin:0;background:#f4f6f9;}
+header{background:#2c3e50;color:white;padding:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;}
+header h1{margin:0;font-size:18px;}
+header button{margin-left:5px;padding:6px 12px;border-radius:6px;border:none;background:#e74c3c;color:white;cursor:pointer;}
+.container{padding:15px;}
+input,select{width:100%;padding:10px;margin:5px 0;box-sizing:border-box;border-radius:5px;border:1px solid #ccc;}
+button{padding:10px;border:none;background:#3498db;color:white;border-radius:4px;cursor:pointer;margin:2px;}
+button:hover{background:#2980b9;}
+table{width:100%;border-collapse:collapse;background:white;margin-top:10px;}
+th,td{border:1px solid #ddd;padding:8px;text-align:center;}
+th{background:#34495e;color:white;}
+.table-wrap{overflow-x:auto;}
+img.photo{width:40px;height:40px;border-radius:50%;object-fit:cover;}
+.login{max-width:320px;margin:100px auto;background:white;padding:20px;box-shadow:0 0 10px rgba(0,0,0,0.2);}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;justify-content:center;align-items:center;z-index:999;}
+.modal-box{background:white;padding:20px;max-width:400px;width:90%;overflow:auto;max-height:90%;border-radius:6px;}
+.summary{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;}
+.summary div{flex:1 1 120px;background:#ecf0f1;padding:10px;border-radius:6px;text-align:center;font-weight:bold;}
+@media(max-width:600px){table{font-size:12px;}header h1{font-size:16px;}button{padding:6px;}}
+</style>
+</head>
+<body>
+
+<header>
+<h1>Personel Takip PRO</h1>
+<div>
+<button onclick="excel()">Excel İndir</button>
+<button onclick="logout()">Çıkış</button>
+</div>
+</header>
+
+<div id="loginPage" class="login">
+<h3>Giriş</h3>
+<input id="user" placeholder="Kullanıcı">
+<input id="pass" type="password" placeholder="Şifre">
+<button onclick="login()">Giriş</button>
+</div>
+
+<div id="app" class="container" style="display:none">
+
+<div class="summary">
+<div id="topKisi">Personel:0</div>
+<div id="topMaas">Toplam Maaş:0</div>
+<div id="topMesai">Toplam Mesai:0</div>
+<div id="topNet">Toplam Net:0</div>
+</div>
+
+<canvas id="chart" style="max-height:300px;"></canvas>
+
+<hr>
+<h3>Personel Ekle</h3>
+<input id="ad" placeholder="Ad">
+<input id="tel" placeholder="Telefon">
+<input id="maas" type="number" placeholder="Maaş">
+<input id="mesaiUcret" type="number" placeholder="Mesai Saat Ücreti">
+<input id="devamsizlikUcret" type="number" placeholder="Devamsızlık Baz Tutarı">
+<input type="file" id="foto">
+<button onclick="personelEkle()">Personel Ekle</button>
+
+<hr>
+<h3>İşlem Ekle</h3>
+<select id="personelSelect"></select>
+<select id="islemTip">
+<option value="mesai">Mesai</option>
+<option value="avans">Avans</option>
+<option value="dev">Devamsızlık</option>
+</select>
+<input id="islemDeger" type="number" placeholder="Saat / Gün / Tutar">
+<button onclick="islemEkle()">İşlem Ekle</button>
+
+<hr>
+<input id="arama" placeholder="Personel ara..." onkeyup="render()">
+
+<div class="table-wrap">
+<table id="personelTable">
+<thead>
+<tr>
+<th>Foto</th>
+<th>Ad</th>
+<th>Telefon</th>
+<th>Maaş</th>
+<th>Mesai</th>
+<th>Avans</th>
+<th>Devamsızlık</th>
+<th>Net</th>
+<th>İşlem</th>
+</tr>
+</thead>
+<tbody id="liste"></tbody>
+</table>
+</div>
+</div>
+
+<div id="detayModal" class="modal">
+<div class="modal-box" id="bordroBox">
+<h3>Personel Detayı</h3>
+<div id="detay"></div>
+<button onclick="printBordro()">Bordroyu Yazdır</button>
+<button onclick="kapat()">Kapat</button>
+</div>
+</div>
+
+<script>
+let data=JSON.parse(localStorage.getItem("personeller"))||[];
+let chart=null;
+
+if(localStorage.getItem("login")=="true"){showApp();}
+
+function login(){
+  if(user.value=="admin" && pass.value=="1234"){
+    localStorage.setItem("login","true"); showApp();
+  } else alert("Hatalı giriş");
+}
+function logout(){localStorage.removeItem("login");location.reload();}
+function showApp(){loginPage.style.display="none";app.style.display="block";render();}
+function save(){localStorage.setItem("personeller",JSON.stringify(data));}
+function hesapla(p){p.net=Number(p.maas)+Number(p.mesai)-Number(p.avans)-Number(p.dev);}
+
+function personelEkle(){
+  let reader=new FileReader();
+  let file=foto.files[0];
+  reader.onload=function(e){
+    let p={ad:ad.value,tel:tel.value,maas:Number(maas.value)||0,mesaiSaat:Number(mesaiUcret.value)||0,devBaz:Number(devamsizlikUcret.value)||0,mesai:0,avans:0,dev:0,net:0,h:[],foto:e.target.result};
+    hesapla(p); data.push(p); save(); render();
+    ad.value=""; tel.value=""; maas.value=""; mesaiUcret.value=""; devamsizlikUcret.value=""; foto.value="";
+  }
+  if(file){reader.readAsDataURL(file);} else {reader.onload({target:{result:""}});}
+}
+
+function islemEkle(){
+  let i=Number(personelSelect.value);
+  let tip=islemTip.value;
+  let v=Number(islemDeger.value);
+  if(!data[i]||!v) return;
+  let p=data[i],tut=0;
+  if(tip==="mesai"){ tut=v*p.mesaiSaat; p.mesai+=tut; }
+  else if(tip==="avans"){ tut=v; p.avans+=tut; }
+  else if(tip==="dev"){ tut=v*p.devBaz; p.dev+=tut; }
+  p.h.push({t:new Date().toLocaleString(),tip:tip,v:v,tut:tut});
+  hesapla(p); save(); render(); islemDeger.value="";
+}
+
+function render(){
+  let aramaText=arama.value?.toLowerCase()||"";
+  liste.innerHTML=""; personelSelect.innerHTML="";
+  let labels=[], maasData=[], netData=[], toplamM=0, toplamMes=0, toplamNet=0;
+  data.forEach((p,i)=>{
+    if(!p.ad.toLowerCase().includes(aramaText)) return;
+    liste.innerHTML+=`<tr>
+<td>${p.foto?'<img src="'+p.foto+'" class="photo">':''}</td>
+<td>${p.ad}</td>
+<td>${p.tel}</td>
+<td>${p.maas}</td>
+<td>${p.mesai}</td>
+<td>${p.avans}</td>
+<td>${p.dev}</td>
+<td>${p.net}</td>
+<td>
+<button onclick="detay(${i})">Detay</button>
+<button onclick="duzenle(${i})">Düzelt</button>
+<button onclick="sil(${i})">Sil</button>
+</td></tr>`;
+    personelSelect.innerHTML+=`<option value="${i}">${p.ad}</option>`;
+    labels.push(p.ad); maasData.push(p.maas); netData.push(p.net);
+    toplamM+=p.maas; toplamMes+=p.mesai; toplamNet+=p.net;
+  });
+  document.getElementById("topKisi").innerText="Personel:"+data.length;
+  document.getElementById("topMaas").innerText="Toplam Maaş:"+toplamM;
+  document.getElementById("topMesai").innerText="Toplam Mesai:"+toplamMes;
+  document.getElementById("topNet").innerText="Toplam Net:"+toplamNet;
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById("chart"),{type:'bar',data:{labels,datasets:[{label:"Maaş",data:maasData,backgroundColor:'#10b981'},{label:"Net",data:netData,backgroundColor:'#f39c12'}]},options:{responsive:true}});
+}
+
+function detay(i){
+  let p=data[i], html=`<img src="${p.foto}" class="photo"><br>Tel: ${p.tel}<br>Maaş: ${p.maas}<br>Mesai: ${p.mesai}<br>Avans: ${p.avans}<br>Devamsızlık: ${p.dev}<br>Net: ${p.net}<hr><b>Kayıt Defteri</b><br>`;
+  p.h.forEach(x=>{html+=`${x.t} - ${x.tip} - ${x.tut}₺<br>`;});
+  document.getElementById("detay").innerHTML=html;
+  document.getElementById("detayModal").style.display="flex";
+}
+function kapat(){document.getElementById("detayModal").style.display="none";}
+function sil(i){if(confirm("Silmek istiyor musun?")){data.splice(i,1);save();render();}}
+function duzenle(i){let p=data[i]; let adP=prompt("Ad",p.ad); let telP=prompt("Tel",p.tel); if(adP)p.ad=adP;if(telP)p.tel=telP; save(); render();}
+
+function printBordro(){let bordro = document.getElementById("bordroBox").innerHTML; let win = window.open("","_blank"); win.document.write(`<html><head><title>Bordro</title><style>body{font-family:Arial;padding:10px;}h3{margin:5px 0;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #000;padding:5px;text-align:center;}</style></head><body>${bordro}</body></html>`); win.document.close(); win.print();}
+
+function excel(){const ws_data=[["Ad","Tel","Maaş","Mesai","Avans","Devamsızlık","Net"]]; data.forEach(p=>{ws_data.push([p.ad,p.tel,p.maas,p.mesai,p.avans,p.dev,p.net]);}); const ws=XLSX.utils.aoa_to_sheet(ws_data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Personeller"); XLSX.writeFile(wb,"personeller.xlsx");}
+
+// PWA Service Worker
+if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}
+</script>
+
+</body>
+</html>
