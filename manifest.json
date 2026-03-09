@@ -1,15 +1,20 @@
 {
-  "name": "Personel Takip Paneli V2",
-  "short_name": "PTP V2",
-  "start_url": "./personel_takip.html",
+  "name": "Personel Takip PRO",
+  "short_name": "PersonelPanel",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#eef1f6",
-  "theme_color": "#4f46e5",
+  "background_color": "#ffffff",
+  "theme_color": "#2c3e50",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
-      "type": ""C:\Yeni klasör\depositphotos_79408928-stock-illustration-staff-icon.png""
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
